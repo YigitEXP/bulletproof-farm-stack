@@ -1,0 +1,79 @@
+#!/bin/bash
+
+COMMAND=$1
+
+# Eğer argüman 'baslat' ise...
+if [ "$COMMAND" == "start" ]; then
+    echo "🚀 Sistem ayağa kaldırılıyor..."
+    # TODO: Sistemi arka planda (detached) ayağa kaldıran ve imajları derleyen o uzun docker-compose komutunu buraya yaz.
+    docker-compose up -d --build
+
+# Eğer argüman 'durdur' ise...
+elif [ "$COMMAND" == "stop" ]; then
+    echo "🛑 Sistem durduruluyor ve ağ temizleniyor..."
+    # TODO: Çalışan docker-compose sistemini tamamen durduran ve konteynerleri silen komutu yaz. (İpucu: 'up' kelimesinin zıttı)
+    docker-compose down
+
+# Eğer argüman 'loglar' ise...
+elif [ "$COMMAND" == "logs" ]; then
+    echo "📋 Backend logları getiriliyor..."
+    # TODO: Sadece 'sec-backend' isimli konteynerin loglarını ekrana yazdıran komutu yaz.
+    docker-compose logs backend-api
+
+elif [ "$COMMAND" == "backup" ]; then
+    echo "📦 Veritabanı yedeği alınıyor..."
+    docker exec sec-mongodb mongodump --archive --gzip > db_backup_$(date +%Y%m%d_%H%M).gz
+
+elif [ "$COMMAND" == "scan" ]; then
+    echo "🔍 Güvenlik taraması yapılıyor..."
+
+    # Önce özel yolu dene, yoksa PATH'deki trivy'yi bul
+    TRIVY_PATH="C:\DEVELOPER\tools\trivy.exe"
+    
+    if [ -f "$TRIVY_PATH" ]; then
+        TRIVY_CMD="$TRIVY_PATH"
+    elif command -v trivy >/dev/null 2>&1; then
+        TRIVY_CMD="trivy"
+    elif command -v trivy.exe >/dev/null 2>&1; then
+        TRIVY_CMD="trivy.exe"
+    else
+        echo "❌ Trivy bulunamadı. Lütfen trivy'yi PATH'e ekleyin veya C:\DEVELOPER\tools\trivy.exe konumuna yükleyin."
+        exit 1
+    fi
+
+    echo "Trivy bulundu: $TRIVY_CMD"
+
+    mkdir -p trivy-reports
+
+    # 1) Dosya sistemi taraması (repo içi secret + vuln + config)
+    "$TRIVY_CMD" fs . \
+      --scanners vuln,secret,config \
+      --severity HIGH,CRITICAL \
+      --format table \
+      --output trivy-reports/fs-report.txt
+
+    # 2) Docker image taraması (compose içindeki image'ları otomatik alır)
+    for img in $(docker-compose config --images); do
+        safe_name=$(echo "$img" | tr '/:' '__')
+        echo "Image taranıyor: $img"
+        "$TRIVY_CMD" image "$img" \
+          --severity HIGH,CRITICAL \
+          --format table \
+          --output "trivy-reports/image-${safe_name}.txt"
+    done
+
+    echo "✅ Tarama tamamlandı. Raporlar: trivy-reports/"
+
+else
+    # Eğer kullanıcı yanlış bir şey yazarsa veya hiçbir şey yazmazsa yardım menüsü gösterelim
+    echo "--------------------------------------------------"
+    echo "❌ Hatalı kullanım veya eksik komut!"
+    echo "Kullanım Şekli: ./operate.sh [KOMUT]"
+    echo "Geçerli Komutlar:"
+    echo "  start  -> Sistemi derler ve ayağa kaldırır."
+    echo "  stop   -> Sistemi durdurur ve konteynerleri siler."
+    echo "  logs   -> Backend servisinin loglarını gösterir."
+    echo "  backup -> Veritabanının yedeğini alır."
+    echo "  scan   -> Dosya sistemi ve Docker image'larını güvenlik taramasından geçirir."
+    echo "--------------------------------------------------"
+fi

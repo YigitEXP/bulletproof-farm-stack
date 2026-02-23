@@ -1,0 +1,5 @@
+trivy-reports/
+*.gz
+*.txt
+.env
+.DS_Store
