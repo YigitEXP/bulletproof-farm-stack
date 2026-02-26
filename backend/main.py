@@ -1,11 +1,28 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from auth import get_password_hash, create_access_token, verify_password, decode_access_token  # auth.py'den gelen fonksiyonlar
 from db import users_collection  # db.py'den gelen hazır bağlantı
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import redis.asyncio as redis
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis_conn = redis.from_url("redis://redis-cache:6379")
+    yield
+    await redis_conn.close()
+
+# SlowAPI Limiter - Redis storage ile
+limiter = Limiter(key_func=get_remote_address)
+
+app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 origins = [
     "http://localhost:5173", # React'in varsayılan portu
@@ -48,9 +65,10 @@ class UserAuthSchema(BaseModel):
     username: str
     password: str
 
-# 2. Register Fonksiyonu (Sadece bir tane olsun)
+# 2. Register Fonksiyonu - Saatte 3 deneme limiti
 @app.post("/register")
-async def register(user: UserAuthSchema): # Body'den okuması için 'user' parametresi şart
+@limiter.limit("3/hour")
+async def register(request: Request, user: UserAuthSchema): # Body'den okuması için 'user' parametresi şart
     username = user.username.lower()
     existing_user = await users_collection.find_one({"username": username})
     
@@ -65,9 +83,10 @@ async def register(user: UserAuthSchema): # Body'den okuması için 'user' param
     await users_collection.insert_one(new_user)
     return {"message": f"Kullanici {user.username} basariyla kaydedildi!"}
 
-# 3. Login Fonksiyonu 
+# 3. Login Fonksiyonu - Dakikada 5 deneme limiti
 @app.post("/login")
-async def login(user: UserAuthSchema):
+@limiter.limit("5/minute")
+async def login(request: Request, user: UserAuthSchema):
     db_user = await users_collection.find_one({"username": user.username.lower()})
     if not db_user or not verify_password(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Kullanici adi veya sifre hatali!")

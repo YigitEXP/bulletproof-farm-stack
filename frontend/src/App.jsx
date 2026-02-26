@@ -1,11 +1,19 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import Login from './components/Login';
 import Register from './components/Register';
 import Profile from './components/Profile';
+import MouseGlow from './components/MouseGlow';
+import HackerIllustration from './components/HackerIllustration';
+import './CyberStyles.css';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (x, y) => {
+    setMousePos({ x, y });
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -14,29 +22,48 @@ function App() {
 
   return (
     <Router>
-      <div className="App" style={{ fontFamily: 'Arial', textAlign: 'center', marginTop: '50px' }}>
-        <h1>🛡️ Secure Guard System</h1>
-        <hr style={{ width: '50%', marginBottom: '30px' }} />
+      <div className="app-container">
+        <MouseGlow onMouseMove={handleMouseMove} />
+        <HackerIllustration mouseX={mousePos.x} mouseY={mousePos.y} />
+        
+        <header className="cyber-header">
+          <h1 className="cyber-title">
+            <span className="shield-icon">🛡️</span> Bulletproof Security
+          </h1>
+          <p className="cyber-subtitle">Ultra Secure Authentication System</p>
+        </header>
+
+        {!token && (
+          <nav className="nav-links">
+            <Link to="/" className={`nav-link ${!token ? 'active' : ''}`}>
+              Giriş Yap
+            </Link>
+            <Link to="/register" className="nav-link">
+              Kayıt Ol
+            </Link>
+          </nav>
+        )}
 
         <Routes>
-          {/* DURUM 1: Ana Sayfa (/) kontrolü */}
           <Route path="/" element={
             !token ? (
               <Login onLoginSuccess={(newToken) => setToken(newToken)} />
             ) : (
-              <div>
+              <div className="dashboard-container">
                 <Profile />
-                <button onClick={handleLogout} style={{ marginTop: '20px', padding: '10px 20px', cursor: 'pointer', backgroundColor: '#ff4444', color: 'white', border: 'none', borderRadius: '5px' }}>
-                  Güvenli Çıkış Yap
-                </button>
+                <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+                  <button onClick={handleLogout} className="cyber-button danger">
+                    🔒 Güvenli Çıkış
+                  </button>
+                </div>
               </div>
             )
           } />
 
-          {/* DURUM 2: Register Sayfası */}
-          <Route path="/register" element={<Register />} />
+          <Route path="/register" element={
+            token ? <Navigate to="/" /> : <Register />
+          } />
 
-          {/* DURUM 3: Login Sayfası (Doğrudan erişim için) */}
           <Route path="/login" element={
             token ? <Navigate to="/" /> : <Login onLoginSuccess={(newToken) => setToken(newToken)} />
           } />

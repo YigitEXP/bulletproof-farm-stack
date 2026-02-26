@@ -1,0 +1,171 @@
+/* ============================================
+   PROFILE COMPONENT STYLES
+   ============================================ */
+
+.profile-loading,
+.profile-error {
+  text-align: center;
+  padding: 3rem;
+}
+
+.profile-loading p {
+  margin-top: 1rem;
+  color: var(--text-secondary);
+}
+
+/* Profile Header Card */
+.profile-header-card {
+  margin-bottom: 1.5rem;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bg-dark);
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+  animation: avatar-pulse 3s ease-in-out infinite;
+}
+
+@keyframes avatar-pulse {
+  0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.3); }
+  50% { box-shadow: 0 0 50px rgba(0, 255, 136, 0.5); }
+}
+
+.profile-info h2 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.profile-info p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Security Status Grid */
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.security-item {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.security-item:hover {
+  border-color: var(--primary);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0, 255, 136, 0.1);
+}
+
+.security-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.security-label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+
+.security-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem;
+  color: var(--primary);
+}
+
+/* Token Info Section */
+.token-section {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.token-section-title {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.token-display {
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.token-display-row {
+  margin-bottom: 0.5rem;
+}
+
+.token-display-row:last-child {
+  margin-bottom: 0;
+}
+
+/* Token Card */
+.token-card {
+  border: 1px solid rgba(0, 255, 136, 0.15);
+}
+
+.token-card-title {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.token-note {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .security-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .security-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,87 +1,122 @@
 #!/bin/bash
 
-# Trivy'nin yolunu Bash ortamına kalıcı olarak ekliyoruz
+# Trivy'nin yolunu Bash ortamına ekliyoruz
 export PATH=$PATH:/c/DEVELOPER/tools
 COMMAND=$1
 
-# Eğer argüman 'baslat' ise...
-if [ "$COMMAND" == "start" ]; then
-    echo "🚀 Sistem ayağa kaldırılıyor..."
-    # TODO: Sistemi arka planda (detached) ayağa kaldıran ve imajları derleyen o uzun docker-compose komutunu buraya yaz.
-    docker-compose up -d --build
-
-# Eğer argüman 'durdur' ise...
-elif [ "$COMMAND" == "stop" ]; then
-    echo "🛑 Sistem durduruluyor ve ağ temizleniyor..."
-    # TODO: Çalışan docker-compose sistemini tamamen durduran ve konteynerleri silen komutu yaz. (İpucu: 'up' kelimesinin zıttı)
-    docker-compose down
-
-# Eğer argüman 'loglar' ise...
-elif [ "$COMMAND" == "logs" ]; then
-    echo "📋 Backend logları getiriliyor..."
-    # TODO: Sadece 'sec-backend' isimli konteynerin loglarını ekrana yazdıran komutu yaz.
-    docker-compose logs backend-api
-
-elif [ "$COMMAND" == "backup" ]; then
-    echo "--- Şifreli Yedekleme Başlatılıyor ---"
-    mkdir -p ./.secret_backups
-    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    
-    # 1. Önce veriyi al, sonra OpenSSL ile şifrele
-    # 'openssl enc -aes-256-cbc' komutu bir şifre isteyecek
-    docker exec sec-mongodb mongodump --archive --gzip --db bulletproof_db | \
-
-    MASTER_KEY=$(grep MASTER_KEY .env | cut -d '=' -f2)
-    docker exec sec-mongodb mongodump --archive --gzip --db bulletproof_db | \
-    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
-    -out ./.secret_backups/backup_$TIMESTAMP.gz.enc \
-    -pass pass:"$MASTER_KEY"
-
-    chmod 600 ./.secret_backups/*.enc
-    echo "✅ Şifreli yedek oluşturuldu: .secret_backups/backup_$TIMESTAMP.gz.enc"
-
-    find ./.secret_backups/ -name "*.gz" -type f -mtime +7 -delete
-
-elif [ "$COMMAND" == "scan" ]; then
-    echo "🔍 Güvenlik taraması yapılıyor..."
-
-# Windows/Git Bash uyumluluğu için daha esnek bir kontrol
-    if ! trivy --version >/dev/null 2>&1; then
-        echo \"❌ Trivy komutu bulunamadi!\"
-        exit 1
-    fi
-
-    mkdir -p trivy-reports
-
-    # 1) Dosya sistemi taraması (repo içi secret + vuln + config)
-    trivy fs . \
-      --scanners vuln,secret,config \
-      --severity HIGH,CRITICAL \
-      --format table \
-      --output trivy-reports/fs-report.txt
-
-    # 2) Docker image taraması (compose içindeki image'ları otomatik alır)
-    for img in $(docker-compose config --images); do
-        safe_name=$(echo "$img" | tr '/:' '__')
-        echo "Image taranıyor: $img"
-        trivy image "$img" \
-          --severity HIGH,CRITICAL \
-          --format table \
-          --output "trivy-reports/image-${safe_name}.txt"
-    done
-
-    echo "✅ Tarama tamamlandı. Raporlar: trivy-reports/"
-
-else
-    # Eğer kullanıcı yanlış bir şey yazarsa veya hiçbir şey yazmazsa yardım menüsü gösterelim
+# Yardım menüsünü bir fonksiyon olarak tanımlıyoruz (kod tekrarını önler)
+show_help() {
     echo "--------------------------------------------------"
     echo "❌ Hatalı kullanım veya eksik komut!"
-    echo "Kullanım Şekli: ./operate.sh [KOMUT]"
+    echo "Kullanım Şekli: bash operate.sh [KOMUT]"
     echo "Geçerli Komutlar:"
-    echo "  start  -> Sistemi derler ve ayağa kaldırır."
-    echo "  stop   -> Sistemi durdurur ve konteynerleri siler."
-    echo "  logs   -> Backend servisinin loglarını gösterir."
-    echo "  backup -> Veritabanının yedeğini alır."
-    echo "  scan   -> Dosya sistemi ve Docker image'larını güvenlik taramasından geçirir."
+    echo "  start          -> Sistemi derler ve ayağa kaldırır."
+    echo "  stop           -> Sistemi durdurur ve konteynerleri siler."
+    echo "  logs           -> Backend servisinin loglarını gösterir."
+    echo "  logs-frontend  -> Frontend (Nginx) loglarını gösterir."
+    echo "  status         -> Container durumlarını gösterir."
+    echo "  backup         -> Veritabanının şifreli yedeğini alır."
+    echo "  trivy-scan     -> Güvenlik taraması yapar (FS + Images)."
+    echo "  k6-test        -> Grafana K6 ile yük testi yapar."
+    echo "  hard-start     -> Cache temizleyerek frontend'i yeniden derler."
     echo "--------------------------------------------------"
+}
+
+# Komut girilmemişse yardımı göster ve çık
+if [ -z "$COMMAND" ]; then
+    show_help
+    exit 1
 fi
+
+case "$COMMAND" in
+    "start")
+        echo "🚀 Sistem ayağa kaldırılıyor.."
+        docker-compose up -d --build
+        echo "✅ http://localhost:5173 adresinden erişebilirsiniz."
+        ;;
+
+    "stop")
+        echo "🛑 Sistem durduruluyor..."
+        docker-compose down
+        ;;
+
+    "logs")
+        echo "📋 Backend logları getiriliyor..."
+        docker-compose logs -f backend-api
+        ;;
+
+    "logs-frontend")
+        echo "📋 Frontend (Nginx) logları getiriliyor..."
+        docker-compose logs -f frontend
+        ;;
+
+    "backup")
+        echo "--- 🔐 Şifreli Yedekleme Başlatılıyor ---"
+        mkdir -p ./.secret_backups
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        
+        # .env içinden anahtarı alıyoruz
+        MASTER_KEY=$(grep MASTER_KEY .env | cut -d '=' -f2)
+        
+        if [ -z "$MASTER_KEY" ]; then
+            echo "❌ Hata: .env içinde MASTER_KEY bulunamadı!"
+            exit 1
+        fi
+
+        # Veriyi çek ve OpenSSL ile AES-256 kullanarak şifrele
+        docker exec sec-mongodb mongodump --archive --gzip --db bulletproof_db | \
+        openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+        -out ./.secret_backups/backup_$TIMESTAMP.gz.enc \
+        -pass pass:"$MASTER_KEY"
+
+        chmod 600 ./.secret_backups/*.enc
+        echo "✅ Yedek oluşturuldu: .secret_backups/backup_$TIMESTAMP.gz.enc"
+        
+        # 7 günden eski yedekleri temizle
+        find ./.secret_backups/ -name "*.enc" -type f -mtime +7 -delete
+        ;;
+
+    "trivy-scan")
+        echo "🔍 Güvenlik taraması yapılıyor..."
+        if ! command -v trivy &> /dev/null; then
+            echo "❌ Trivy bulunamadı! Lütfen PATH ayarını kontrol edin."
+            exit 1
+        fi
+
+        mkdir -p trivy-reports
+        trivy fs . --scanners vuln,secret,config --severity HIGH,CRITICAL --format table --output trivy-reports/fs-report.txt
+
+        for img in $(docker-compose config --images); do
+            safe_name=$(echo "$img" | tr '/:' '__')
+            echo "📦 Image taranıyor: $img"
+            trivy image "$img" --severity HIGH,CRITICAL --format table --output "trivy-reports/image-${safe_name}.txt"
+        done
+        echo "✅ Raporlar 'trivy-reports/' dizinine kaydedildi."
+        ;;
+
+    "k6-test")
+        echo "🥊 Grafana K6 Yük Testi Başlatılıyor..."
+        cd vulnerability-tests && {
+            cat loadtest.js | docker run --rm -i grafana/k6 run -
+            cd ..
+        } || echo "❌ Hata: vulnerability-tests dizini bulunamadı!"
+        ;;
+
+    "status")
+        echo "📊 Container Durumları:"
+        docker-compose ps
+        ;;
+
+    "hard-start")
+        echo "🔄 Tam temizlik ve Hard Start başlatılıyor..."
+        docker-compose down
+        docker-compose build --no-cache frontend
+        docker-compose up -d
+        echo "🚀 Sistem en güncel haliyle yayında!"
+        ;;
+
+    *)
+        show_help
+        exit 1
+        ;;
+esac
